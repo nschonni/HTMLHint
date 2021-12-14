@@ -6,13 +6,13 @@ import { Command } from 'commander'
 import { existsSync, readFileSync, statSync } from 'fs'
 import * as glob from 'glob'
 import { IGlob } from 'glob'
-import { parseGlob } from './parse-glob'
 import { dirname, resolve, sep } from 'path'
 import fetch from 'node-fetch'
 import * as stripJsonComments from 'strip-json-comments'
 import type { HTMLHint as IHTMLHint } from '../core/core'
 import type { Hint, Ruleset } from '../core/types'
 import { Formatter } from './formatter'
+import isGlob = require('is-glob')
 
 const HTMLHint: typeof IHTMLHint = require('../htmlhint.js').HTMLHint
 const formatter: Formatter = require('./formatter')
@@ -335,28 +335,42 @@ function getGlobInfo(target: string): {
   // fix windows sep
   target = target.replace(/\\/g, '/')
 
-  const globInfo = parseGlob(target)
-  let base = resolve(globInfo.base)
+  const recursiveTokenIndex = Math.max(
+    target.indexOf('**/'),
+    target.indexOf('**\\')
+  )
+  const lastSlashIndex = Math.max(
+    target.lastIndexOf('/'),
+    target.lastIndexOf('\\')
+  )
+  const baseGlobSepIndex =
+    recursiveTokenIndex >= 0 ? recursiveTokenIndex : Math.max(lastSlashIndex, 0)
+
+  const basename = target
+    .substring(Math.max(lastSlashIndex, 0))
+    .replace(/^[/\\]/, '')
+  let base = resolve(
+    target.substring(0, baseGlobSepIndex).replace(/[/\\]$/, '') || '.'
+  )
 
   base += /\/$/.test(base) ? '' : '/'
 
-  let pattern = globInfo.glob
-  const globPath = globInfo.path
+  let pattern = target.substring(baseGlobSepIndex).replace(/^[/\\]/, '')
   const defaultGlob = '*.{htm,html}'
 
-  if (globInfo.is.glob === true) {
+  if (isGlob(target)) {
     // no basename
-    if (globPath.basename === '') {
+    if (basename === '') {
       pattern += defaultGlob
     }
   } else {
     // no basename
-    if (globPath.basename === '') {
+    if (basename === '') {
       pattern += `**/${defaultGlob}`
     }
     // detect directory
     else if (existsSync(target) && statSync(target).isDirectory()) {
-      base += `${globPath.basename}/`
+      base += `${basename}/`
       pattern = `**/${defaultGlob}`
     }
   }
