@@ -230,8 +230,49 @@ function hintAllFiles(
     }>
   }) => void
 ) {
-  const globInfo = getGlobInfo(target)
-  globInfo.ignore = options.ignore
+  // fix windows sep
+  target = target.replace(/\\/g, '/')
+
+  const recursiveTokenIndex = Math.max(
+    target.indexOf('**/'),
+    target.indexOf('**\\')
+  )
+  const lastSlashIndex = Math.max(
+    target.lastIndexOf('/'),
+    target.lastIndexOf('\\')
+  )
+  const baseGlobSepIndex =
+    recursiveTokenIndex >= 0 ? recursiveTokenIndex : Math.max(lastSlashIndex, 0)
+
+  const basename = target
+    .substring(Math.max(lastSlashIndex, 0))
+    .replace(/^[/\\]/, '')
+  let base = resolve(
+    target.substring(0, baseGlobSepIndex).replace(/[/\\]$/, '') || '.'
+  )
+
+  base += /\/$/.test(base) ? '' : '/'
+
+  let pattern = target.substring(baseGlobSepIndex).replace(/^[/\\]/, '')
+  const defaultGlob = '*.{htm,html}'
+
+  if (isGlob(target)) {
+    // no basename
+    if (basename === '') {
+      pattern += defaultGlob
+    }
+  } else {
+    // no basename
+    if (basename === '') {
+      pattern += `**/${defaultGlob}`
+    }
+    // detect directory
+    else if (existsSync(target) && statSync(target).isDirectory()) {
+      base += `${basename}/`
+      pattern = `**/${defaultGlob}`
+    }
+  }
+  const ignore = options.ignore
 
   const formatter = options.formatter
 
@@ -248,7 +289,7 @@ function hintAllFiles(
   // init ruleset
   let ruleset = options.ruleset
   if (ruleset === undefined) {
-    ruleset = getConfig(cliOptions.config, globInfo.base, formatter)
+    ruleset = getConfig(cliOptions.config, base, formatter)
   }
 
   // hint queue
@@ -313,7 +354,7 @@ function hintAllFiles(
     void hintQueue.push(target)
   } else {
     walkPath(
-      globInfo,
+      { base, pattern, ignore },
       (filepath) => {
         isHintDone = false
         void hintQueue.push(filepath)
@@ -323,61 +364,6 @@ function hintAllFiles(
         checkAllHinted()
       }
     )
-  }
-}
-
-// split target to base & glob
-function getGlobInfo(target: string): {
-  base: string
-  pattern: string
-  ignore?: string
-} {
-  // fix windows sep
-  target = target.replace(/\\/g, '/')
-
-  const recursiveTokenIndex = Math.max(
-    target.indexOf('**/'),
-    target.indexOf('**\\')
-  )
-  const lastSlashIndex = Math.max(
-    target.lastIndexOf('/'),
-    target.lastIndexOf('\\')
-  )
-  const baseGlobSepIndex =
-    recursiveTokenIndex >= 0 ? recursiveTokenIndex : Math.max(lastSlashIndex, 0)
-
-  const basename = target
-    .substring(Math.max(lastSlashIndex, 0))
-    .replace(/^[/\\]/, '')
-  let base = resolve(
-    target.substring(0, baseGlobSepIndex).replace(/[/\\]$/, '') || '.'
-  )
-
-  base += /\/$/.test(base) ? '' : '/'
-
-  let pattern = target.substring(baseGlobSepIndex).replace(/^[/\\]/, '')
-  const defaultGlob = '*.{htm,html}'
-
-  if (isGlob(target)) {
-    // no basename
-    if (basename === '') {
-      pattern += defaultGlob
-    }
-  } else {
-    // no basename
-    if (basename === '') {
-      pattern += `**/${defaultGlob}`
-    }
-    // detect directory
-    else if (existsSync(target) && statSync(target).isDirectory()) {
-      base += `${basename}/`
-      pattern = `**/${defaultGlob}`
-    }
-  }
-
-  return {
-    base: base,
-    pattern: pattern,
   }
 }
 
