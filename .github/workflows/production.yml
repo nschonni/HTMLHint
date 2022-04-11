@@ -73,7 +73,7 @@ jobs:
           command: npm run test:coverage
 
       - name: ⬆️ Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           files: ./coverage/coverage-final.json
           name: codecov-prod
